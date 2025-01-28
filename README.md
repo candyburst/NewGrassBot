@@ -1,4 +1,4 @@
-# UPDATED: Grass Desktop Node Bot 2.0x Earnings, Multiple Accounts.
+# NOT WORKING ANYMORE: Grass Desktop Node Bot 2.0x Earnings, Multiple Accounts.
 ### Automate Grass Node mining with this Python based script for VPS, managing multiple Devices and IP address to ensure 24/7 uptime and maximize earnings. Perfect for those seeking a seamless and efficient way to handle WebSocket connections through SOCKS5 Protocol.
 
 ![AGPL License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)
