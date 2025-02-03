@@ -1,6 +1,3 @@
-# Copyright (C) 2024 FakerPK
-# Licensed under the AGPL-3.0: https://www.gnu.org/licenses/agpl-3.0.html
-# This software is provided "as-is" without any warranties.
 import asyncio
 import json
 import random
@@ -10,6 +7,7 @@ import uuid
 from typing import Dict, Optional, Set
 
 import aiofiles
+import aiohttp
 from colorama import Fore, Style, init
 from loguru import logger
 from websockets_proxy import Proxy, proxy_connect
@@ -55,7 +53,7 @@ class WebSocketClient:
                 ssl_context = ssl.create_default_context()
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
-                
+
                 async with proxy_connect(
                     self.uri,
                     proxy=Proxy.from_url(self.proxy),
@@ -71,7 +69,7 @@ class WebSocketClient:
                             await ping_task
                         except asyncio.CancelledError:
                             pass
-                            
+
             except Exception as e:
                 logger.error(f"🚫 Error with proxy {self.proxy}: {str(e)}")
                 if any(pattern in str(e) for pattern in ERROR_PATTERNS):
@@ -100,12 +98,12 @@ class WebSocketClient:
             "AUTH": self._handle_auth,
             "PONG": self._handle_pong
         }
-        
+
         while True:
             response = await websocket.recv()
             message = json.loads(response)
             logger.info(f"📥 Received message: {message}")
-            
+
             handler = handlers.get(message.get("action"))
             if handler:
                 await handler(websocket, message)
@@ -136,7 +134,7 @@ class WebSocketClient:
         try:
             async with aiofiles.open("proxy.txt", "r") as file:
                 lines = await file.readlines()
-            
+
             async with aiofiles.open("proxy.txt", "w") as file:
                 await file.writelines(line for line in lines if line.strip() != self.proxy)
         except Exception as e:
@@ -150,16 +148,21 @@ class ProxyManager:
 
     async def load_proxies(self) -> None:
         try:
-            async with aiofiles.open("proxy.txt", "r") as file:
-                content = await file.read()
-            self.all_proxies = set(line.strip() for line in content.splitlines() if line.strip())
+            url = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        content = await response.text()
+                        self.all_proxies = set(line.strip() for line in content.splitlines() if line.strip())
+                    else:
+                        logger.error(f"❌ Failed to fetch proxies, status code: {response.status}")
         except Exception as e:
             logger.error(f"❌ Error loading proxies: {str(e)}")
 
     async def start(self, max_proxies: int) -> None:
         await self.load_proxies()
         if not self.all_proxies:
-            logger.error("❌ No proxies found in proxy.txt")
+            logger.error("❌ No proxies found in the source list")
             return
 
         self.active_proxies = set(random.sample(list(self.all_proxies), min(len(self.all_proxies), max_proxies)))
@@ -227,7 +230,7 @@ async def load_user_config() -> Optional[Dict]:
         # Get values from config or set defaults
         user_id = config_data.get("user_id", "")
         max_proxies = config_data.get("max_proxies", 100)  # Default to 100 if not found
-        
+
         return {"user_id": user_id, "max_proxies": max_proxies}
     except Exception as e:
         logger.error(f"❌ Error loading configuration: {str(e)}")
@@ -239,12 +242,12 @@ async def user_input() -> None:
     user_id = input(f"{Fore.YELLOW}🔑 Enter your USER_ID: {Style.RESET_ALL}")
     max_proxies = input(f"{Fore.MAGENTA}📡 Enter the maximum number of proxies to use: {Style.RESET_ALL}")
     max_proxies = int(max_proxies)  # Convert input to an integer
-    
+
     config_data = {
         "user_id": user_id,
         "max_proxies": max_proxies
     }
-    
+
     with open(CONFIG_FILE, "w") as config_file:
         json.dump(config_data, config_file, indent=4)
 
@@ -265,7 +268,7 @@ async def main() -> None:
     # Load the saved config
     user_id = config["user_id"]
     max_proxies = config["max_proxies"]  # This loads the max proxies from the config
-    
+
     # Log user info with emojis
     logger.info(f"🚀 Starting with USER_ID: {user_id}")
     logger.info(f"📡 Using a maximum of {max_proxies} proxies")
@@ -282,4 +285,3 @@ if __name__ == '__main__':
         print("\n👋 Shutting down gracefully...")
     except Exception as e:
         logger.error(f"❌ Fatal error: {str(e)}")
-
